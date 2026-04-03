@@ -20,8 +20,11 @@ let captureData;
 let latestSilhouette = null;
 
 // UI
-let modeSelect;
-let shapeSelect;
+let modeButtons = {};
+let shapeButtons = {};
+let activeMode = "Hand";
+let activeShape = "Rectangle";
+
 let sizeSlider;
 let sizeLabel;
 let clearButton;
@@ -87,6 +90,8 @@ async function setup() {
   handPose.detectStart(video, gotHands);
 
   setupUI();
+  setMode("Hand");
+  setShape("Rectangle"); 
 
   await setupSegmentation();
 }
@@ -105,39 +110,134 @@ async function setupSegmentation() {
 }
 
 function setupUI() {
-  modeSelect = createSelect();
-  modeSelect.position(20, 20);
-  modeSelect.option("Hand");
-  modeSelect.option("Mouse");
-  modeSelect.option("Silhouette");
-  modeSelect.selected("Hand");
-  modeSelect.changed(handleModeChange);
+  // MODE LABEL
+  let modeLabel = createDiv("Mode");
+  modeLabel.class("control-label");
+modeLabel.position(20, 20);
+  // MODE BUTTONS
+  modeButtons.Hand = createButton("Hand");
+  modeButtons.Hand.class("ui-btn active");
+  modeButtons.Hand.position(20, 50);
+  modeButtons.Hand.mousePressed(() => setMode("Hand"));
 
-  shapeSelect = createSelect();
-  shapeSelect.position(20, 55);
-  shapeSelect.option("Rectangle");
-  shapeSelect.option("Circle");
-  shapeSelect.option("Star");
-  shapeSelect.selected("Rectangle");
+  modeButtons.Mouse = createButton("Mouse");
+  modeButtons.Mouse.class("ui-btn");
+modeButtons.Mouse.position(140, 50);
+  modeButtons.Mouse.mousePressed(() => setMode("Mouse"));
 
-  sizeLabel = createDiv("Base size");
-  sizeLabel.position(20, 88);
-  sizeLabel.style("color", "white");
-  sizeLabel.style("font-size", "13px");
+  modeButtons.Silhouette = createButton("Silhouette");
+  modeButtons.Silhouette.class("ui-btn");
+modeButtons.Silhouette.position(260, 50);
+  modeButtons.Silhouette.mousePressed(() => setMode("Silhouette"));
 
+  // SHAPE LABEL
+  let shapeLabel = createDiv("Shape");
+  shapeLabel.class("control-label");
+shapeLabel.position(20, 110);
+
+  // SHAPE BUTTONS
+  shapeButtons.Rectangle = createButton(`
+    <svg viewBox="0 0 100 60">
+      <rect x="12" y="12" width="76" height="36"></rect>
+    </svg>
+  `);
+  shapeButtons.Rectangle.class("shape-btn active");
+shapeButtons.Rectangle.position(20, 140);
+  shapeButtons.Rectangle.mousePressed(() => setShape("Rectangle"));
+
+  shapeButtons.Circle = createButton(`
+    <svg viewBox="0 0 100 60">
+      <circle cx="50" cy="30" r="24"></circle>
+    </svg>
+  `);
+  shapeButtons.Circle.class("shape-btn");
+shapeButtons.Circle.position(110, 140);
+  shapeButtons.Circle.mousePressed(() => setShape("Circle"));
+
+  shapeButtons.Star = createButton(`
+    <svg viewBox="0 0 100 60">
+      <polygon points="50,4 60,24 84,24 65,38 72,58 50,46 28,58 35,38 16,24 40,24"></polygon>
+    </svg>
+  `);
+  shapeButtons.Star.class("shape-btn");
+shapeButtons.Star.position(200, 140);
+  shapeButtons.Star.mousePressed(() => setShape("Star"));
+
+  // SIZE LABEL
+  sizeLabel = createDiv("Base Size");
+  sizeLabel.class("control-label");
+sizeLabel.position(20, 220);
+
+  // SIZE SLIDER
   sizeSlider = createSlider(40, 300, 170, 1);
-  sizeSlider.position(20, 110);
-  sizeSlider.style("width", "150px");
+  sizeSlider.addClass("size-slider");
+sizeSlider.position(20, 250);
+  sizeSlider.input(updateSliderFill);
+  updateSliderFill();
 
-  clearButton = createButton("Clear canvas");
-  clearButton.position(20, 180);
+  // CLEAR BUTTON
+  clearButton = createButton("Clear Canvas");
+  clearButton.class("clear-btn");
+clearButton.position(20, 300);
   clearButton.mousePressed(resetCanvasAndTracking);
+}
+function setMode(mode) {
+  activeMode = mode;
 
-  handleModeChange();
+  for (let key in modeButtons) {
+    if (key === mode) {
+      modeButtons[key].addClass("active");
+    } else {
+      modeButtons[key].removeClass("active");
+    }
+  }
+
+  if (mode === "Silhouette") {
+    activeShape = "Silhouette";
+
+    for (let key in shapeButtons) {
+      shapeButtons[key].attribute("disabled", "");
+      shapeButtons[key].removeClass("active");
+      shapeButtons[key].style("opacity", "0.45");
+      shapeButtons[key].style("pointer-events", "none");
+    }
+  } else {
+    if (activeShape === "Silhouette") {
+      activeShape = "Rectangle";
+    }
+
+    for (let key in shapeButtons) {
+      shapeButtons[key].removeAttribute("disabled");
+      shapeButtons[key].style("opacity", "1");
+      shapeButtons[key].style("pointer-events", "auto");
+    }
+
+    setShape(activeShape);
+  }
+}
+
+function setShape(shape) {
+  activeShape = shape;
+
+  for (let key in shapeButtons) {
+    if (key === shape) {
+      shapeButtons[key].addClass("active");
+    } else {
+      shapeButtons[key].removeClass("active");
+    }
+  }
+}
+
+function updateSliderFill() {
+  let min = Number(sizeSlider.elt.min);
+  let max = Number(sizeSlider.elt.max);
+  let val = Number(sizeSlider.value());
+  let pct = ((val - min) / (max - min)) * 100;
+  sizeSlider.elt.style.setProperty("--fill", pct + "%");
 }
 
 function handleModeChange() {
-  if (modeSelect.value() === "Silhouette") {
+  if (activeMode === "Silhouette") {
     shapeSelect.disable();
   } else {
     shapeSelect.enable();
@@ -174,9 +274,9 @@ function gotHands(results) {
 }
 
 function draw() {
-  if (modeSelect.value() === "Silhouette") {
+  if (activeMode === "Silhouette") {
     drawSilhouetteMode();
-  } else if (modeSelect.value() === "Hand") {
+  } else if (activeMode === "Hand") {
     updateHandsAndDraw();
   } else {
     drawWithMouse();
@@ -285,7 +385,7 @@ function updateHandsAndDraw() {
 function stampVideo(x, y, baseSize) {
   let currentW = baseSize;
   let currentH = baseSize * 0.75;
-  let currentShape = shapeSelect.value();
+  let currentShape = activeShape;
 
   push();
   translate(x, y);
@@ -691,14 +791,14 @@ function drawHUD() {
   noStroke();
   fill(255);
   textSize(13);
-  // text("Mode: " + modeSelect.value(), 20, height - 82);
+  // text("Mode: " + activeMode, 20, height - 82);
 
-  if (modeSelect.value() === "Silhouette") {
+  if (activeMode === "Silhouette") {
     // text("Shape: Silhouette", 20, height - 64);
     // text("Base size: " + sizeSlider.value(), 20, height - 46);
     text("Silhouette mode draws segmented body trails.", 20, height - 28);
   } else {
-    // text("Shape: " + shapeSelect.value(), 20, height - 64);
+    // text("Shape: " + activeShape, 20, height - 64);
     // text("Base size: " + sizeSlider.value(), 20, height - 46);
     text("Pinch smaller / open bigger in Hand mode.", 20, height - 28);
   }
