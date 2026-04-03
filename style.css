@@ -155,3 +155,13 @@ canvas {
     font-size: 14px;
     cursor: pointer;
 }
+
+
+/* INFO LABEL */
+.info-label{
+    position: absolute;
+    color: #ffffff;
+    font-size: 14px;
+    line-height: 0px;
+    font-weight: 500;
+}

@@ -28,6 +28,7 @@ let activeShape = "Rectangle";
 let sizeSlider;
 let sizeLabel;
 let clearButton;
+let infoLabel;
 
 // Brush / motion
 let angle = 0;
@@ -183,7 +184,13 @@ function setupUI() {
   clearButton.class("clear-btn");
   clearButton.position(20, 300);
   clearButton.mousePressed(resetCanvasAndTracking);
+
+  // INFO LABEL
+  infoLabel = createDiv('<p>Pinch smaller / open bigger in Hand mode.</p><br><p>Thumbs up = screenshot, thumbs down = clear.</p>');
+  infoLabel.class("info-label");
+  infoLabel.position(20, 720);
 }
+
 function setMode(mode) {
   activeMode = mode;
 
@@ -793,15 +800,14 @@ function getNamedKeypoint(hand, possibleNames, fallbackIndices = []) {
 function drawHUD() {
   noStroke();
   fill(255);
-  textSize(13);
+  // textSize(13);
+  // if (activeMode === "Silhouette") {
+  //   text("Silhouette mode draws segmented body trails.", 20, height - 28);
+  // } else {
+  //   text("Pinch smaller / open bigger in Hand mode.", 20, height - 28);
+  // }
 
-  if (activeMode === "Silhouette") {
-    text("Silhouette mode draws segmented body trails.", 20, height - 28);
-  } else {
-    text("Pinch smaller / open bigger in Hand mode.", 20, height - 28);
-  }
-
-  text("Thumbs up = screenshot, thumbs down = clear.", 20, height - 10);
+  // text("Thumbs up = screenshot, thumbs down = clear.", 20, height - 10);
 }
 
 function windowResized() {
