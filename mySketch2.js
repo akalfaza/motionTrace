@@ -91,7 +91,7 @@ async function setup() {
 
   setupUI();
   setMode("Hand");
-  setShape("Rectangle"); 
+  setShape("Rectangle");
 
   await setupSegmentation();
 }
@@ -113,7 +113,7 @@ function setupUI() {
   // MODE LABEL
   let modeLabel = createDiv("Mode");
   modeLabel.class("control-label");
-modeLabel.position(20, 20);
+  modeLabel.position(20, 20);
   // MODE BUTTONS
   modeButtons.Hand = createButton("Hand");
   modeButtons.Hand.class("ui-btn active");
@@ -122,63 +122,66 @@ modeLabel.position(20, 20);
 
   modeButtons.Mouse = createButton("Mouse");
   modeButtons.Mouse.class("ui-btn");
-modeButtons.Mouse.position(140, 50);
+  modeButtons.Mouse.position(140, 50);
   modeButtons.Mouse.mousePressed(() => setMode("Mouse"));
 
   modeButtons.Silhouette = createButton("Silhouette");
   modeButtons.Silhouette.class("ui-btn");
-modeButtons.Silhouette.position(260, 50);
+  modeButtons.Silhouette.position(260, 50);
   modeButtons.Silhouette.mousePressed(() => setMode("Silhouette"));
 
   // SHAPE LABEL
   let shapeLabel = createDiv("Shape");
   shapeLabel.class("control-label");
-shapeLabel.position(20, 110);
+  shapeLabel.position(20, 110);
 
   // SHAPE BUTTONS
-  shapeButtons.Rectangle = createButton(`
-    <svg viewBox="0 0 100 60">
-      <rect x="12" y="12" width="76" height="36"></rect>
-    </svg>
-  `);
-  shapeButtons.Rectangle.class("shape-btn active");
-shapeButtons.Rectangle.position(20, 140);
+  // shapeButtons.Rectangle = createButton(`
+  //   <svg viewBox="0 0 100 60">
+  //     <rect x="12" y="12" width="76" height="36"></rect>
+  //   </svg>
+  // `);
+  shapeButtons.Rectangle = createButton("");
+  shapeButtons.Rectangle.class("rect-btn active");
+  shapeButtons.Rectangle.position(20, 145);
   shapeButtons.Rectangle.mousePressed(() => setShape("Rectangle"));
 
-  shapeButtons.Circle = createButton(`
-    <svg viewBox="0 0 100 60">
-      <circle cx="50" cy="30" r="24"></circle>
-    </svg>
-  `);
-  shapeButtons.Circle.class("shape-btn");
-shapeButtons.Circle.position(110, 140);
+  // shapeButtons.Circle = createButton(`
+  //   <svg viewBox="0 0 100 60">
+  //     <circle cx="50" cy="30" r="24"></circle>
+  //   </svg>
+  // `);
+  shapeButtons.Circle = createButton("");
+  shapeButtons.Circle.class("circle-btn");
+  shapeButtons.Circle.position(110, 140);
   shapeButtons.Circle.mousePressed(() => setShape("Circle"));
 
-  shapeButtons.Star = createButton(`
-    <svg viewBox="0 0 100 60">
-      <polygon points="50,4 60,24 84,24 65,38 72,58 50,46 28,58 35,38 16,24 40,24"></polygon>
-    </svg>
-  `);
-  shapeButtons.Star.class("shape-btn");
-shapeButtons.Star.position(200, 140);
+  // shapeButtons.Star = createButton(`
+  //   <svg viewBox="0 0 100 60">
+  //     <polygon points="50,4 60,24 84,24 65,38 72,58 50,46 28,58 35,38 16,24 40,24"></polygon>
+  //   </svg>
+  // `);
+  shapeButtons.Star = createButton("");
+  shapeButtons.Star.class("star-btn");
+  shapeButtons.Star.position(180, 140);
   shapeButtons.Star.mousePressed(() => setShape("Star"));
 
   // SIZE LABEL
   sizeLabel = createDiv("Base Size");
   sizeLabel.class("control-label");
-sizeLabel.position(20, 220);
+  sizeLabel.position(20, 220);
 
   // SIZE SLIDER
   sizeSlider = createSlider(40, 300, 170, 1);
   sizeSlider.addClass("size-slider");
-sizeSlider.position(20, 250);
+  sizeSlider.position(20, 250);
   sizeSlider.input(updateSliderFill);
   updateSliderFill();
 
   // CLEAR BUTTON
   clearButton = createButton("Clear Canvas");
   clearButton.class("clear-btn");
-clearButton.position(20, 300);
+  clearButton.position(20, 300);
   clearButton.mousePressed(resetCanvasAndTracking);
 }
 function setMode(mode) {
@@ -791,15 +794,10 @@ function drawHUD() {
   noStroke();
   fill(255);
   textSize(13);
-  // text("Mode: " + activeMode, 20, height - 82);
 
   if (activeMode === "Silhouette") {
-    // text("Shape: Silhouette", 20, height - 64);
-    // text("Base size: " + sizeSlider.value(), 20, height - 46);
     text("Silhouette mode draws segmented body trails.", 20, height - 28);
   } else {
-    // text("Shape: " + activeShape, 20, height - 64);
-    // text("Base size: " + sizeSlider.value(), 20, height - 46);
     text("Pinch smaller / open bigger in Hand mode.", 20, height - 28);
   }
 
