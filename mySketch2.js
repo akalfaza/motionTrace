@@ -22,8 +22,8 @@ let latestSilhouette = null;
 // UI
 let modeButtons = {};
 let shapeButtons = {};
-let activeMode = "Hand";
-let activeShape = "Rectangle";
+let activeMode = "Silhouette";
+let activeShape = "Silhouette";
 
 let sizeSlider;
 let sizeLabel;
@@ -91,8 +91,7 @@ async function setup() {
   handPose.detectStart(video, gotHands);
 
   setupUI();
-  setMode("Hand");
-  setShape("Rectangle");
+  setMode("Silhouette");
 
   await setupSegmentation();
 }
@@ -116,20 +115,20 @@ function setupUI() {
   modeLabel.class("control-label");
   modeLabel.position(20, 20);
   // MODE BUTTONS
+  modeButtons.Silhouette = createButton("Silhouette");
+  modeButtons.Silhouette.class("ui-btn active");
+  modeButtons.Silhouette.position(20, 50);
+  modeButtons.Silhouette.mousePressed(() => setMode("Silhouette"));
+
   modeButtons.Hand = createButton("Hand");
-  modeButtons.Hand.class("ui-btn active");
-  modeButtons.Hand.position(20, 50);
+  modeButtons.Hand.class("ui-btn");
+  modeButtons.Hand.position(140, 50);
   modeButtons.Hand.mousePressed(() => setMode("Hand"));
 
   modeButtons.Mouse = createButton("Mouse");
   modeButtons.Mouse.class("ui-btn");
-  modeButtons.Mouse.position(140, 50);
+  modeButtons.Mouse.position(260, 50);
   modeButtons.Mouse.mousePressed(() => setMode("Mouse"));
-
-  modeButtons.Silhouette = createButton("Silhouette");
-  modeButtons.Silhouette.class("ui-btn");
-  modeButtons.Silhouette.position(260, 50);
-  modeButtons.Silhouette.mousePressed(() => setMode("Silhouette"));
 
   // SHAPE LABEL
   let shapeLabel = createDiv("Shape");
@@ -186,7 +185,7 @@ function setupUI() {
   clearButton.mousePressed(resetCanvasAndTracking);
 
   // INFO LABEL
-  infoLabel = createDiv('<p>Pinch smaller / open bigger in Hand mode.</p><br><p>Thumbs up = screenshot, thumbs down = clear.</p>');
+  infoLabel = createDiv('<p>Pinch smaller / open bigger in Hand mode.</p><p>Thumbs up = screenshot, thumbs down = clear.</p><p>Press H key to hide/show menu.</p>');
   infoLabel.class("info-label");
   infoLabel.position(20, 720);
 }
@@ -806,7 +805,6 @@ function drawHUD() {
   // } else {
   //   text("Pinch smaller / open bigger in Hand mode.", 20, height - 28);
   // }
-
   // text("Thumbs up = screenshot, thumbs down = clear.", 20, height - 10);
 }
 
