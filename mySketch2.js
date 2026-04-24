@@ -54,6 +54,9 @@ let heatMaxValue = 100;
 let heatGrid = [];
 let heatCols = 0;
 let heatRows = 0;
+let kaleidoscopeSegments = 8;
+let minKaleidoscopeSegments = 4;
+let maxKaleidoscopeSegments = 18;
 let thermalPaletteStops = [
   { at: 0.0, rgb: [255, 0, 110] },
   { at: 0.16, rgb: [196, 30, 255] },
@@ -173,6 +176,11 @@ function setupUI() {
   modeButtons.Mouse.position(260, 50);
   modeButtons.Mouse.mousePressed(() => setMode("Mouse"));
 
+  modeButtons.Kaleidoscope = createButton("Kaleidoscope");
+  modeButtons.Kaleidoscope.class("ui-btn");
+  modeButtons.Kaleidoscope.position(380, 50);
+  modeButtons.Kaleidoscope.mousePressed(() => setMode("Kaleidoscope"));
+
   // COLOR LABEL
   colorLabel = createDiv("Color");
   colorLabel.class("control-label");
@@ -267,6 +275,7 @@ function setupUI() {
     <p>Thumbs up takes a screenshot and thumbs down clears the canvas.</p>
     <p>Use Fade Rate to control how quickly old stamps disappear.</p>
     <p>Body Heat Map makes frequently used areas shift from cool blue to hot red.</p>
+    <p>Kaleidoscope mode mirrors each stamp around the center. Drag left or right to change mirror count.</p>
     <p>To hide the settings press "h" on keyboard.</p>
   `);
   helpPanel.class("help-panel hidden");
@@ -435,6 +444,8 @@ function draw() {
 
   if (activeMode === "Silhouette") {
     drawSilhouetteMode();
+  } else if (activeMode === "Kaleidoscope") {
+    drawKaleidoscopeMode();
   } else if (activeMode === "Hand") {
     updateHandsAndDraw();
   } else {
@@ -461,6 +472,28 @@ function drawWithMouse() {
     let baseSize = sizeSlider.value();
     stampVideo(mouseX, mouseY, baseSize, baseSize);
   }
+}
+
+function drawKaleidoscopeMode() {
+  if (!mouseIsPressed) return;
+
+  let baseSize = sizeSlider.value();
+  kaleidoscopeSegments = floor(
+    map(
+      constrain(mouseX, 0, width),
+      0,
+      width,
+      minKaleidoscopeSegments,
+      maxKaleidoscopeSegments + 1
+    )
+  );
+  kaleidoscopeSegments = constrain(
+    kaleidoscopeSegments,
+    minKaleidoscopeSegments,
+    maxKaleidoscopeSegments
+  );
+
+  stampKaleidoscope(mouseX, mouseY, baseSize);
 }
 
 function updateHandsAndDraw() {
@@ -553,6 +586,11 @@ function updateHandsAndDraw() {
 }
 
 function stampVideo(x, y, baseSize, heatRadius = baseSize) {
+  drawStampAt(x, y, baseSize, heatRadius);
+  angle += rotationSpeed;
+}
+
+function drawStampAt(x, y, baseSize, heatRadius = baseSize) {
   let currentW = baseSize;
   let currentH = baseSize * 0.75;
   let currentShape = activeShape;
@@ -592,6 +630,25 @@ function stampVideo(x, y, baseSize, heatRadius = baseSize) {
 
   ctx.restore();
   pop();
+}
+
+function stampKaleidoscope(x, y, baseSize) {
+  let centerX = width / 2;
+  let centerY = height / 2;
+  let dx = x - centerX;
+  let dy = y - centerY;
+  let radius = dist(x, y, centerX, centerY);
+  let wedgeAngle = TWO_PI / kaleidoscopeSegments;
+  let localAngle = atan2(dy, dx);
+  localAngle = ((localAngle % wedgeAngle) + wedgeAngle) % wedgeAngle;
+
+  for (let i = 0; i < kaleidoscopeSegments; i++) {
+    let reflectedAngle = i % 2 === 0 ? localAngle : wedgeAngle - localAngle;
+    let drawAngle = i * wedgeAngle + reflectedAngle;
+    let drawX = centerX + cos(drawAngle) * radius;
+    let drawY = centerY + sin(drawAngle) * radius;
+    drawStampAt(drawX, drawY, baseSize, baseSize);
+  }
 
   angle += rotationSpeed;
 }
