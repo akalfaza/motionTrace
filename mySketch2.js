@@ -22,9 +22,15 @@ let latestSilhouette = null;
 // UI
 let modeButtons = {};
 let shapeButtons = {};
+let colorButtons = {};
 let activeMode = "Silhouette";
 let activeShape = "Silhouette";
+let activeColorMode = "Regular";
+let uiHidden = false;
 
+let modeLabel;
+let shapeLabel;
+let colorLabel;
 let sizeSlider;
 let sizeLabel;
 let fadeSlider;
@@ -33,6 +39,7 @@ let clearButton;
 let helpButton;
 let helpPanel;
 let helpCloseButton;
+let thermalBuffer;
 
 // Brush / motion
 let angle = 0;
@@ -42,6 +49,20 @@ let positionSmoothing = 0.5;
 let sizeSmoothing = 0.25;
 let rangeMargin = 20;
 let silhouetteMaskThreshold = 40;
+let heatCellSize = 28;
+let heatMaxValue = 100;
+let heatGrid = [];
+let heatCols = 0;
+let heatRows = 0;
+let thermalPaletteStops = [
+  { at: 0.0, rgb: [255, 0, 110] },
+  { at: 0.16, rgb: [196, 30, 255] },
+  { at: 0.34, rgb: [24, 76, 255] },
+  { at: 0.52, rgb: [0, 240, 180] },
+  { at: 0.7, rgb: [196, 255, 0] },
+  { at: 0.85, rgb: [255, 188, 0] },
+  { at: 1.0, rgb: [255, 66, 0] }
+];
 
 // Adaptive calibration bounds
 let observedMinX = null;
@@ -92,9 +113,12 @@ async function setup() {
 
   // captureData = createGraphics(640, 480);
   captureData = createGraphics(960, 720);
+  thermalBuffer = createGraphics(160, 120);
+  thermalBuffer.pixelDensity(1);
 
   handPose.detectStart(video, gotHands);
 
+  initializeHeatMap();
   setupUI();
   setMode("Silhouette");
 
@@ -130,7 +154,7 @@ async function setupSegmentation() {
 
 function setupUI() {
   // MODE LABEL
-  let modeLabel = createDiv("Mode");
+  modeLabel = createDiv("Mode");
   modeLabel.class("control-label");
   modeLabel.position(20, 20);
   // MODE BUTTONS
@@ -149,10 +173,25 @@ function setupUI() {
   modeButtons.Mouse.position(260, 50);
   modeButtons.Mouse.mousePressed(() => setMode("Mouse"));
 
+  // COLOR LABEL
+  colorLabel = createDiv("Color");
+  colorLabel.class("control-label");
+  colorLabel.position(20, 110);
+
+  colorButtons.Regular = createButton("Regular");
+  colorButtons.Regular.class("ui-btn active color-btn");
+  colorButtons.Regular.position(20, 140);
+  colorButtons.Regular.mousePressed(() => setColorMode("Regular"));
+
+  colorButtons["Body Heat Map"] = createButton("Body Heat Map");
+  colorButtons["Body Heat Map"].class("ui-btn color-btn wide-btn");
+  colorButtons["Body Heat Map"].position(140, 140);
+  colorButtons["Body Heat Map"].mousePressed(() => setColorMode("Body Heat Map"));
+
   // SHAPE LABEL
-  let shapeLabel = createDiv("Shape");
+  shapeLabel = createDiv("Shape");
   shapeLabel.class("control-label");
-  shapeLabel.position(20, 110);
+  shapeLabel.position(20, 210);
 
   // SHAPE BUTTONS
   // shapeButtons.Rectangle = createButton(`
@@ -162,7 +201,7 @@ function setupUI() {
   // `);
   shapeButtons.Rectangle = createButton("");
   shapeButtons.Rectangle.class("rect-btn active");
-  shapeButtons.Rectangle.position(20, 145);
+  shapeButtons.Rectangle.position(20, 245);
   shapeButtons.Rectangle.mousePressed(() => setShape("Rectangle"));
 
   // shapeButtons.Circle = createButton(`
@@ -172,7 +211,7 @@ function setupUI() {
   // `);
   shapeButtons.Circle = createButton("");
   shapeButtons.Circle.class("circle-btn");
-  shapeButtons.Circle.position(110, 140);
+  shapeButtons.Circle.position(110, 240);
   shapeButtons.Circle.mousePressed(() => setShape("Circle"));
 
   // shapeButtons.Star = createButton(`
@@ -182,37 +221,37 @@ function setupUI() {
   // `);
   shapeButtons.Star = createButton("");
   shapeButtons.Star.class("star-btn");
-  shapeButtons.Star.position(180, 140);
+  shapeButtons.Star.position(180, 240);
   shapeButtons.Star.mousePressed(() => setShape("Star"));
 
   // SIZE LABEL
   sizeLabel = createDiv("Base Size");
   sizeLabel.class("control-label");
-  sizeLabel.position(20, 220);
+  sizeLabel.position(20, 320);
 
   // SIZE SLIDER
   sizeSlider = createSlider(40, 300, 170, 1);
   sizeSlider.addClass("size-slider");
-  sizeSlider.position(20, 250);
+  sizeSlider.position(20, 350);
   sizeSlider.input(() => updateRangeSliderFill(sizeSlider));
   updateRangeSliderFill(sizeSlider);
 
   // FADE LABEL
   fadeLabel = createDiv("Fade Rate");
   fadeLabel.class("control-label");
-  fadeLabel.position(20, 300);
+  fadeLabel.position(20, 400);
 
   // FADE SLIDER
   fadeSlider = createSlider(0, 40, 0, 1);
   fadeSlider.addClass("size-slider");
-  fadeSlider.position(20, 330);
+  fadeSlider.position(20, 430);
   fadeSlider.input(() => updateRangeSliderFill(fadeSlider));
   updateRangeSliderFill(fadeSlider);
 
   // CLEAR BUTTON
   clearButton = createButton("Clear Canvas");
   clearButton.class("clear-btn");
-  clearButton.position(20, 390);
+  clearButton.position(20, 490);
   clearButton.mousePressed(resetCanvasAndTracking);
 
   // HELP UI
@@ -227,6 +266,8 @@ function setupUI() {
     <p>Pinch smaller and open bigger in Hand mode.</p>
     <p>Thumbs up takes a screenshot and thumbs down clears the canvas.</p>
     <p>Use Fade Rate to control how quickly old stamps disappear.</p>
+    <p>Body Heat Map makes frequently used areas shift from cool blue to hot red.</p>
+    <p>To hide the settings press "h" on keyboard.</p>
   `);
   helpPanel.class("help-panel hidden");
 
@@ -234,6 +275,24 @@ function setupUI() {
   helpCloseButton.class("help-close");
   helpCloseButton.parent(helpPanel);
   helpCloseButton.mousePressed(() => toggleHelpPanel(false));
+}
+
+function getUIElements() {
+  return [
+    modeLabel,
+    ...Object.values(modeButtons),
+    shapeLabel,
+    ...Object.values(shapeButtons),
+    colorLabel,
+    ...Object.values(colorButtons),
+    sizeLabel,
+    sizeSlider,
+    fadeLabel,
+    fadeSlider,
+    clearButton,
+    helpButton,
+    helpPanel
+  ].filter(Boolean);
 }
 
 function setMode(mode) {
@@ -283,6 +342,18 @@ function setShape(shape) {
   }
 }
 
+function setColorMode(mode) {
+  activeColorMode = mode;
+
+  for (let key in colorButtons) {
+    if (key === mode) {
+      colorButtons[key].addClass("active");
+    } else {
+      colorButtons[key].removeClass("active");
+    }
+  }
+}
+
 function updateRangeSliderFill(slider) {
   let min = Number(slider.elt.min);
   let max = Number(slider.elt.max);
@@ -293,11 +364,29 @@ function updateRangeSliderFill(slider) {
 
 function toggleHelpPanel(isOpen) {
   if (!helpPanel || !helpButton) return;
+  if (uiHidden) return;
 
   if (isOpen) {
     helpPanel.removeClass("hidden");
     helpButton.addClass("hidden");
   } else {
+    helpPanel.addClass("hidden");
+    helpButton.removeClass("hidden");
+  }
+}
+
+function setUIHidden(hidden) {
+  uiHidden = hidden;
+
+  for (let element of getUIElements()) {
+    if (hidden) {
+      element.addClass("hidden");
+    } else {
+      element.removeClass("hidden");
+    }
+  }
+
+  if (!hidden && helpPanel && helpButton) {
     helpPanel.addClass("hidden");
     helpButton.removeClass("hidden");
   }
@@ -334,6 +423,7 @@ function resetCanvasAndTracking() {
   handStates.Unknown = createHandState();
 
   latestSilhouette = null;
+  initializeHeatMap();
 }
 
 function gotHands(results) {
@@ -369,7 +459,7 @@ function applyCanvasFade() {
 function drawWithMouse() {
   if (mouseIsPressed) {
     let baseSize = sizeSlider.value();
-    stampVideo(mouseX, mouseY, baseSize);
+    stampVideo(mouseX, mouseY, baseSize, baseSize);
   }
 }
 
@@ -458,14 +548,16 @@ function updateHandsAndDraw() {
       state.smoothSize = lerp(state.smoothSize, state.targetSize, sizeSmoothing);
     }
 
-    stampVideo(state.smoothX, state.smoothY, state.smoothSize);
+    stampVideo(state.smoothX, state.smoothY, state.smoothSize, state.smoothSize);
   }
 }
 
-function stampVideo(x, y, baseSize) {
+function stampVideo(x, y, baseSize, heatRadius = baseSize) {
   let currentW = baseSize;
   let currentH = baseSize * 0.75;
   let currentShape = activeShape;
+
+  registerHeatAt(x, y, heatRadius);
 
   push();
   translate(x, y);
@@ -495,7 +587,7 @@ function stampVideo(x, y, baseSize) {
 
   push();
   scale(-1, 1);
-  image(video, 0, 0, currentW, currentH);
+  drawHeatMappedImage(video, 0, 0, currentW, currentH, getHeatValueAt(x, y));
   pop();
 
   ctx.restore();
@@ -552,17 +644,146 @@ function drawSilhouetteMode() {
   if (latestSilhouette && silhouetteSmoothX !== null && silhouetteSmoothY !== null) {
     let baseSize = sizeSlider.value();
     let scaleAmt = baseSize / 170;
+    let drawW = latestSilhouette.width * scaleAmt;
+    let drawH = latestSilhouette.height * scaleAmt;
+
+    registerHeatAt(
+      silhouetteSmoothX,
+      silhouetteSmoothY,
+      max(drawW, drawH) * 0.45
+    );
 
     push();
-    image(
+    drawHeatMappedImage(
       latestSilhouette,
       silhouetteSmoothX,
       silhouetteSmoothY,
-      latestSilhouette.width * scaleAmt,
-      latestSilhouette.height * scaleAmt
+      drawW,
+      drawH,
+      getHeatValueAt(silhouetteSmoothX, silhouetteSmoothY)
     );
     pop();
   }
+}
+
+function initializeHeatMap() {
+  heatCols = ceil(width / heatCellSize);
+  heatRows = ceil(height / heatCellSize);
+  heatGrid = new Array(heatCols * heatRows).fill(0);
+}
+
+function registerHeatAt(x, y, radius) {
+  if (activeColorMode !== "Body Heat Map") return;
+  if (heatGrid.length === 0) initializeHeatMap();
+
+  let radiusInCells = max(1, ceil(radius / heatCellSize));
+  let centerCol = floor(constrain(x, 0, width - 1) / heatCellSize);
+  let centerRow = floor(constrain(y, 0, height - 1) / heatCellSize);
+
+  for (let row = centerRow - radiusInCells; row <= centerRow + radiusInCells; row++) {
+    if (row < 0 || row >= heatRows) continue;
+
+    for (let col = centerCol - radiusInCells; col <= centerCol + radiusInCells; col++) {
+      if (col < 0 || col >= heatCols) continue;
+
+      let cellCenterX = (col + 0.5) * heatCellSize;
+      let cellCenterY = (row + 0.5) * heatCellSize;
+      let distance = dist(x, y, cellCenterX, cellCenterY);
+
+      if (distance > radius) continue;
+
+      let influence = map(distance, 0, radius, 9, 2);
+      let index = row * heatCols + col;
+      heatGrid[index] = min(heatMaxValue, heatGrid[index] + influence);
+    }
+  }
+}
+
+function getHeatValueAt(x, y) {
+  if (heatGrid.length === 0) initializeHeatMap();
+
+  let colIndex = floor(constrain(x, 0, width - 1) / heatCellSize);
+  let rowIndex = floor(constrain(y, 0, height - 1) / heatCellSize);
+  let heatValue = heatGrid[rowIndex * heatCols + colIndex] || 0;
+  return constrain(heatValue / heatMaxValue, 0, 1);
+}
+
+function drawHeatMappedImage(img, x, y, w, h, heatValue) {
+  if (activeColorMode !== "Body Heat Map") {
+    noTint();
+    image(img, x, y, w, h);
+    return;
+  }
+
+  let targetW = max(36, min(140, floor(abs(w) * 0.28)));
+  let targetH = max(36, min(140, floor(abs(h) * 0.28)));
+  ensureThermalBufferSize(targetW, targetH);
+
+  thermalBuffer.clear();
+  thermalBuffer.push();
+  thermalBuffer.imageMode(CENTER);
+  thermalBuffer.noTint();
+  thermalBuffer.image(img, targetW / 2, targetH / 2, targetW, targetH);
+  thermalBuffer.pop();
+
+  thermalBuffer.loadPixels();
+  let px = thermalBuffer.pixels;
+
+  for (let i = 0; i < px.length; i += 4) {
+    let alpha = px[i + 3];
+    if (alpha === 0) continue;
+
+    let r = px[i];
+    let g = px[i + 1];
+    let b = px[i + 2];
+    let luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    let channelSpread = (max(r, g, b) - min(r, g, b)) / 255;
+    let thermalLevel = constrain(
+      pow(luminance, 0.72) * 0.82 + heatValue * 0.38 + channelSpread * 0.18,
+      0,
+      1
+    );
+    let thermalColor = sampleThermalPalette(thermalLevel);
+
+    px[i] = thermalColor[0];
+    px[i + 1] = thermalColor[1];
+    px[i + 2] = thermalColor[2];
+  }
+
+  thermalBuffer.updatePixels();
+  noTint();
+  image(thermalBuffer, x, y, w, h);
+}
+
+function ensureThermalBufferSize(targetW, targetH) {
+  if (!thermalBuffer) {
+    thermalBuffer = createGraphics(targetW, targetH);
+    thermalBuffer.pixelDensity(1);
+    return;
+  }
+
+  if (thermalBuffer.width !== targetW || thermalBuffer.height !== targetH) {
+    thermalBuffer.resizeCanvas(targetW, targetH);
+    thermalBuffer.pixelDensity(1);
+  }
+}
+
+function sampleThermalPalette(t) {
+  for (let i = 0; i < thermalPaletteStops.length - 1; i++) {
+    let current = thermalPaletteStops[i];
+    let next = thermalPaletteStops[i + 1];
+
+    if (t >= current.at && t <= next.at) {
+      let amt = map(t, current.at, next.at, 0, 1);
+      return [
+        lerp(current.rgb[0], next.rgb[0], amt),
+        lerp(current.rgb[1], next.rgb[1], amt),
+        lerp(current.rgb[2], next.rgb[2], amt)
+      ];
+    }
+  }
+
+  return thermalPaletteStops[thermalPaletteStops.length - 1].rgb;
 }
 
 function updateSilhouettePosition(info) {
@@ -904,4 +1125,11 @@ function drawHUD() {
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+  initializeHeatMap();
+}
+
+function keyPressed() {
+  if (key === "h" || key === "H") {
+    setUIHidden(!uiHidden);
+  }
 }

@@ -38,6 +38,14 @@ canvas {
     color: white;
 }
 
+.color-btn {
+    min-width: 110px;
+}
+
+.wide-btn {
+    min-width: 150px;
+}
+
 /* SHAPE BUTTONS */
 .rect-btn {
     position: absolute;
