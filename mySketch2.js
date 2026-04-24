@@ -40,6 +40,7 @@ let helpButton;
 let helpPanel;
 let helpCloseButton;
 let thermalBuffer;
+let pixelBuffer;
 
 // Brush / motion
 let angle = 0;
@@ -118,6 +119,8 @@ async function setup() {
   captureData = createGraphics(960, 720);
   thermalBuffer = createGraphics(160, 120);
   thermalBuffer.pixelDensity(1);
+  pixelBuffer = createGraphics(64, 64);
+  pixelBuffer.pixelDensity(1);
 
   handPose.detectStart(video, gotHands);
 
@@ -191,9 +194,14 @@ function setupUI() {
   colorButtons.Regular.position(20, 140);
   colorButtons.Regular.mousePressed(() => setColorMode("Regular"));
 
+  colorButtons.Pixelated = createButton("Pixelated");
+  colorButtons.Pixelated.class("ui-btn color-btn");
+  colorButtons.Pixelated.position(140, 140);
+  colorButtons.Pixelated.mousePressed(() => setColorMode("Pixelated"));
+
   colorButtons["Body Heat Map"] = createButton("Body Heat Map");
   colorButtons["Body Heat Map"].class("ui-btn color-btn wide-btn");
-  colorButtons["Body Heat Map"].position(140, 140);
+  colorButtons["Body Heat Map"].position(260, 140);
   colorButtons["Body Heat Map"].mousePressed(() => setColorMode("Body Heat Map"));
 
   // SHAPE LABEL
@@ -274,6 +282,7 @@ function setupUI() {
     <p>Pinch smaller and open bigger in Hand mode.</p>
     <p>Thumbs up takes a screenshot and thumbs down clears the canvas.</p>
     <p>Use Fade Rate to control how quickly old stamps disappear.</p>
+    <p>Pixelated color mode renders the webcam as chunky low-resolution blocks.</p>
     <p>Body Heat Map makes frequently used areas shift from cool blue to hot red.</p>
     <p>Kaleidoscope mode mirrors each stamp around the center. Drag left or right to change mirror count.</p>
     <p>To hide the settings press "h" on keyboard.</p>
@@ -766,9 +775,14 @@ function getHeatValueAt(x, y) {
 }
 
 function drawHeatMappedImage(img, x, y, w, h, heatValue) {
-  if (activeColorMode !== "Body Heat Map") {
+  if (activeColorMode === "Regular") {
     noTint();
     image(img, x, y, w, h);
+    return;
+  }
+
+  if (activeColorMode === "Pixelated") {
+    drawPixelatedImage(img, x, y, w, h);
     return;
   }
 
@@ -812,6 +826,27 @@ function drawHeatMappedImage(img, x, y, w, h, heatValue) {
   image(thermalBuffer, x, y, w, h);
 }
 
+function drawPixelatedImage(img, x, y, w, h) {
+  let targetW = max(8, min(28, floor(abs(w) * 0.08)));
+  let targetH = max(8, min(28, floor(abs(h) * 0.08)));
+  ensurePixelBufferSize(targetW, targetH);
+
+  pixelBuffer.clear();
+  pixelBuffer.push();
+  pixelBuffer.imageMode(CENTER);
+  pixelBuffer.noTint();
+  pixelBuffer.drawingContext.imageSmoothingEnabled = false;
+  pixelBuffer.image(img, targetW / 2, targetH / 2, targetW, targetH);
+  pixelBuffer.pop();
+
+  push();
+  noSmooth();
+  drawingContext.imageSmoothingEnabled = false;
+  noTint();
+  image(pixelBuffer, x, y, w, h);
+  pop();
+}
+
 function ensureThermalBufferSize(targetW, targetH) {
   if (!thermalBuffer) {
     thermalBuffer = createGraphics(targetW, targetH);
@@ -822,6 +857,19 @@ function ensureThermalBufferSize(targetW, targetH) {
   if (thermalBuffer.width !== targetW || thermalBuffer.height !== targetH) {
     thermalBuffer.resizeCanvas(targetW, targetH);
     thermalBuffer.pixelDensity(1);
+  }
+}
+
+function ensurePixelBufferSize(targetW, targetH) {
+  if (!pixelBuffer) {
+    pixelBuffer = createGraphics(targetW, targetH);
+    pixelBuffer.pixelDensity(1);
+    return;
+  }
+
+  if (pixelBuffer.width !== targetW || pixelBuffer.height !== targetH) {
+    pixelBuffer.resizeCanvas(targetW, targetH);
+    pixelBuffer.pixelDensity(1);
   }
 }
 
