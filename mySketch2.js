@@ -27,8 +27,12 @@ let activeShape = "Silhouette";
 
 let sizeSlider;
 let sizeLabel;
+let fadeSlider;
+let fadeLabel;
 let clearButton;
-let infoLabel;
+let helpButton;
+let helpPanel;
+let helpCloseButton;
 
 // Brush / motion
 let angle = 0;
@@ -37,6 +41,7 @@ let holdFrames = 14;
 let positionSmoothing = 0.5;
 let sizeSmoothing = 0.25;
 let rangeMargin = 20;
+let silhouetteMaskThreshold = 40;
 
 // Adaptive calibration bounds
 let observedMinX = null;
@@ -98,14 +103,28 @@ async function setup() {
 
 async function setupSegmentation() {
   try {
-    const model = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
+    const model = bodySegmentation.SupportedModels.BodyPix;
     const segmenterConfig = {
       runtime: "tfjs",
-      solutionPath: "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@1.0.2"
+      architecture: "MobileNetV1",
+      outputStride: 16,
+      multiplier: 0.75,
+      quantBytes: 2
     };
     segmenter = await bodySegmentation.createSegmenter(model, segmenterConfig);
   } catch (err) {
-    console.error("Segmentation failed to load:", err);
+    console.warn("BodyPix failed to load, falling back to Selfie Segmentation:", err);
+
+    try {
+      const fallbackModel = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
+      const fallbackConfig = {
+        runtime: "tfjs",
+        solutionPath: "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@1.0.2"
+      };
+      segmenter = await bodySegmentation.createSegmenter(fallbackModel, fallbackConfig);
+    } catch (fallbackErr) {
+      console.error("Segmentation failed to load:", fallbackErr);
+    }
   }
 }
 
@@ -175,19 +194,46 @@ function setupUI() {
   sizeSlider = createSlider(40, 300, 170, 1);
   sizeSlider.addClass("size-slider");
   sizeSlider.position(20, 250);
-  sizeSlider.input(updateSliderFill);
-  updateSliderFill();
+  sizeSlider.input(() => updateRangeSliderFill(sizeSlider));
+  updateRangeSliderFill(sizeSlider);
+
+  // FADE LABEL
+  fadeLabel = createDiv("Fade Rate");
+  fadeLabel.class("control-label");
+  fadeLabel.position(20, 300);
+
+  // FADE SLIDER
+  fadeSlider = createSlider(0, 40, 0, 1);
+  fadeSlider.addClass("size-slider");
+  fadeSlider.position(20, 330);
+  fadeSlider.input(() => updateRangeSliderFill(fadeSlider));
+  updateRangeSliderFill(fadeSlider);
 
   // CLEAR BUTTON
   clearButton = createButton("Clear Canvas");
   clearButton.class("clear-btn");
-  clearButton.position(20, 300);
+  clearButton.position(20, 390);
   clearButton.mousePressed(resetCanvasAndTracking);
 
-  // INFO LABEL
-  infoLabel = createDiv('<p>Pinch smaller / open bigger in Hand mode.</p><p>Thumbs up = screenshot, thumbs down = clear.</p><p>Press H key to hide/show menu.</p>');
-  infoLabel.class("info-label");
-  infoLabel.position(20, 720);
+  // HELP UI
+  helpButton = createButton("?");
+  helpButton.class("help-toggle");
+  helpButton.mousePressed(() => toggleHelpPanel(true));
+
+  helpPanel = createDiv(`
+    <div class="help-header">
+      <span>Help</span>
+    </div>
+    <p>Pinch smaller and open bigger in Hand mode.</p>
+    <p>Thumbs up takes a screenshot and thumbs down clears the canvas.</p>
+    <p>Use Fade Rate to control how quickly old stamps disappear.</p>
+  `);
+  helpPanel.class("help-panel hidden");
+
+  helpCloseButton = createButton("x");
+  helpCloseButton.class("help-close");
+  helpCloseButton.parent(helpPanel);
+  helpCloseButton.mousePressed(() => toggleHelpPanel(false));
 }
 
 function setMode(mode) {
@@ -237,12 +283,24 @@ function setShape(shape) {
   }
 }
 
-function updateSliderFill() {
-  let min = Number(sizeSlider.elt.min);
-  let max = Number(sizeSlider.elt.max);
-  let val = Number(sizeSlider.value());
+function updateRangeSliderFill(slider) {
+  let min = Number(slider.elt.min);
+  let max = Number(slider.elt.max);
+  let val = Number(slider.value());
   let pct = ((val - min) / (max - min)) * 100;
-  sizeSlider.elt.style.setProperty("--fill", pct + "%");
+  slider.elt.style.setProperty("--fill", pct + "%");
+}
+
+function toggleHelpPanel(isOpen) {
+  if (!helpPanel || !helpButton) return;
+
+  if (isOpen) {
+    helpPanel.removeClass("hidden");
+    helpButton.addClass("hidden");
+  } else {
+    helpPanel.addClass("hidden");
+    helpButton.removeClass("hidden");
+  }
 }
 
 function handleModeChange() {
@@ -283,6 +341,8 @@ function gotHands(results) {
 }
 
 function draw() {
+  applyCanvasFade();
+
   if (activeMode === "Silhouette") {
     drawSilhouetteMode();
   } else if (activeMode === "Hand") {
@@ -293,6 +353,17 @@ function draw() {
 
   checkGestureCommands();
   drawHUD();
+}
+
+function applyCanvasFade() {
+  let fadeAmount = fadeSlider ? fadeSlider.value() : 0;
+  if (fadeAmount <= 0) return;
+
+  push();
+  noStroke();
+  fill(20, fadeAmount);
+  rect(0, 0, width, height);
+  pop();
 }
 
 function drawWithMouse() {
@@ -461,8 +532,15 @@ function drawSilhouetteMode() {
           return;
         }
 
-        latestSilhouette = buildSilhouetteImage(captureData, maskImg);
-        updateSilhouettePosition(maskImg);
+        let silhouetteInfo = getSilhouetteInfo(maskImg);
+        if (!silhouetteInfo) {
+          latestSilhouette = null;
+          segmentationRunning = false;
+          return;
+        }
+
+        latestSilhouette = buildSilhouetteImage(captureData, maskImg, silhouetteInfo);
+        updateSilhouettePosition(silhouetteInfo);
         segmentationRunning = false;
       })
       .catch((err) => {
@@ -487,8 +565,7 @@ function drawSilhouetteMode() {
   }
 }
 
-function updateSilhouettePosition(maskImg) {
-  let info = getSilhouetteInfo(maskImg);
+function updateSilhouettePosition(info) {
   if (!info) return;
 
   updateSilhouetteObservedRange(info.cx, info.cy);
@@ -534,16 +611,24 @@ function getSilhouetteInfo(maskImg) {
   let sumX = 0;
   let sumY = 0;
   let count = 0;
+  let minX = w;
+  let maxX = -1;
+  let minY = h;
+  let maxY = -1;
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       let idx = (y * w + x) * 4;
       let alpha = data[idx];
 
-      if (alpha > 40) {
+      if (alpha > silhouetteMaskThreshold) {
         sumX += x;
         sumY += y;
         count++;
+        minX = min(minX, x);
+        maxX = max(maxX, x);
+        minY = min(minY, y);
+        maxY = max(maxY, y);
       }
     }
   }
@@ -552,7 +637,13 @@ function getSilhouetteInfo(maskImg) {
 
   return {
     cx: sumX / count,
-    cy: sumY / count
+    cy: sumY / count,
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1
   };
 }
 
@@ -571,22 +662,25 @@ function updateSilhouetteObservedRange(x, y) {
   observedSilMaxY = max(observedSilMaxY, y);
 }
 
-function buildSilhouetteImage(sourceGfx, maskImg) {
-  let w = sourceGfx.width;
-  let h = sourceGfx.height;
-
-  let out = createImage(w, h);
+function buildSilhouetteImage(sourceGfx, maskImg, info) {
+  let out = createImage(info.width, info.height);
 
   sourceGfx.loadPixels();
   out.loadPixels();
 
-  for (let i = 0; i < out.pixels.length; i += 4) {
-    let maskValue = maskImg.data[i];
+  for (let y = info.minY; y <= info.maxY; y++) {
+    for (let x = info.minX; x <= info.maxX; x++) {
+      let sourceIdx = (y * sourceGfx.width + x) * 4;
+      let targetX = x - info.minX;
+      let targetY = y - info.minY;
+      let targetIdx = (targetY * info.width + targetX) * 4;
+      let maskValue = maskImg.data[sourceIdx];
 
-    out.pixels[i] = sourceGfx.pixels[i];
-    out.pixels[i + 1] = sourceGfx.pixels[i + 1];
-    out.pixels[i + 2] = sourceGfx.pixels[i + 2];
-    out.pixels[i + 3] = maskValue > 40 ? 255 : 0;
+      out.pixels[targetIdx] = sourceGfx.pixels[sourceIdx];
+      out.pixels[targetIdx + 1] = sourceGfx.pixels[sourceIdx + 1];
+      out.pixels[targetIdx + 2] = sourceGfx.pixels[sourceIdx + 2];
+      out.pixels[targetIdx + 3] = maskValue > silhouetteMaskThreshold ? 255 : 0;
+    }
   }
 
   out.updatePixels();
